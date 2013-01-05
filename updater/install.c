@@ -53,6 +53,10 @@
 #include "wipe.h"
 #endif
 
+#ifdef USE_UBIFS
+#include "ubi.h"
+#endif
+
 void uiPrint(State* state, char* buffer) {
     char* line = strtok(buffer, "\n");
     UpdaterInfo* ui = (UpdaterInfo*)(state->cookie);
@@ -90,6 +94,7 @@ char* PrintSha1(const uint8_t* digest) {
 //
 //    fs_type="yaffs2" partition_type="MTD"     location=partition
 //    fs_type="ext4"   partition_type="EMMC"    location=device
+//    fs_type="ubifs"  partition_type="UBI"    location=device
 Value* MountFn(const char* name, State* state, int argc, Expr* argv[]) {
     char* result = NULL;
     if (argc != 4 && argc != 5) {
@@ -360,6 +365,14 @@ Value* FormatFn(const char* name, State* state, int argc, Expr* argv[]) {
             goto done;
         }
         result = location;
+#endif
+#ifdef USE_UBIFS
+    } else if (strcmp(fs_type, "ubifs") == 0) {
+
+            if (ubiVolumeFormat(location) != 0)
+                    goto done;
+
+            result = location;
 #endif
     } else {
         printf("%s: unsupported fs_type \"%s\" partition_type \"%s\"",

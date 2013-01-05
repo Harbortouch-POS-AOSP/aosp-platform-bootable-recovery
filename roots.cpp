@@ -37,6 +37,13 @@ extern "C" {
 
 static struct fstab *fstab = NULL;
 
+#ifdef USE_UBIFS
+#include "ubi.h"
+#endif
+
+static int num_volumes = 0;
+static Volume* device_volumes = NULL;
+
 extern struct selabel_handle *sehandle;
 
 void load_volume_table()
@@ -119,7 +126,14 @@ int ensure_path_mounted(const char* path) {
 
         LOGE("failed to mount %s (%s)\n", v->mount_point, strerror(errno));
         return -1;
-    }
+        } else if(strcmp(v->fs_type, "ubifs") == 0) {
+    	    result = mount(v->blk_device, v->mount_point, v->fs_type,
+                       MS_NOATIME | MS_NODEV | MS_NODIRATIME, "");
+        if (result == 0) return 0;
+
+        LOGE("failed to mount %s (%s)\n", v->mount_point, strerror(errno));
+        return -1;
+	}
 
     LOGE("unknown fs_type \"%s\" for %s\n", v->fs_type, v->mount_point);
     return -1;
@@ -260,6 +274,18 @@ int format_volume(const char* volume) {
         }
         return 0;
     }
+#ifdef USE_UBIFS
+    if (strcmp(v->fs_type, "ubifs") == 0) {
+        int ret;
+        LOGW("formating by ubiVolumeFormat");
+        ret = ubiVolumeFormat(v->device);
+        if (ret != 0) {
+            LOGE("ubiVolumeFormat return error:%d", ret);
+            return -1;
+        }
+            return 0;
+    }
+#endif
 
     LOGE("format_volume: fs_type \"%s\" unsupported\n", v->fs_type);
     return -1;
