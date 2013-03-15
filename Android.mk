@@ -88,12 +88,10 @@ ifeq ($(TARGET_USERIMAGES_USE_EXT4), true)
 endif
 
 LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
-ifeq ($(TARGET_USERIMAGES_USE_UBIFS),true)
-    LOCAL_CFLAGS += -DUSE_UBIFS
-    LOCAL_C_INCLUDES += external/mtd-utils/new-utils/include/
-    LOCAL_STATIC_LIBRARIES += libubi
-    LOCAL_SRC_FILES += ubi.cpp
-endif
+LOCAL_CFLAGS += -DUSE_UBIFS
+LOCAL_C_INCLUDES += external/mtd-utils/new-utils/include/
+LOCAL_STATIC_LIBRARIES += libubi
+LOCAL_SRC_FILES += ubi.cpp
 
 ifeq ($(HAVE_SELINUX), true)
   LOCAL_C_INCLUDES += external/libselinux/include
