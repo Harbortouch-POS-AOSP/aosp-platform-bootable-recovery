@@ -110,6 +110,19 @@ void ScreenRecoveryUI::draw_background_locked(Icon icon) {
         int textX = (gr_fb_width() - textWidth) / 2;
         int textY = ((gr_fb_height() - (iconHeight+textHeight+40+sh)) / 2) + iconHeight + 40;
 
+        if (progressBarType != EMPTY) {
+            int progressHeight = gr_get_height(progressBarEmpty);
+            //Be sure to align below with draw_progress_locked();
+            int progressY = (3*gr_fb_height() + iconHeight - 2*progressHeight)/4;
+            int moveY = textY + textHeight - progressY;
+            if (( moveY > 0) && (moveY < 30)) {
+                //Dont have enough space for progress bar show_text
+                //Move the text a bit
+                //Make sure the text and icon have at least 10pixel space
+                textY -= moveY;
+            }
+        }
+
         gr_blit(surface, 0, 0, iconWidth, iconHeight, iconX, iconY);
         if (stageHeight > 0) {
             int sw = gr_get_width(stageMarkerEmpty);
