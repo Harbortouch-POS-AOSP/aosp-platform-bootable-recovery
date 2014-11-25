@@ -83,13 +83,13 @@ LOCAL_STATIC_LIBRARIES := \
 
 ifeq ($(TARGET_USERIMAGES_USE_EXT4), true)
     LOCAL_CFLAGS += -DUSE_EXT4
-    LOCAL_C_INCLUDES += system/extras/ext4_utils
+    LOCAL_C_INCLUDES += system/extras/ext4_utils 
     LOCAL_STATIC_LIBRARIES += libext4_utils_static libz
 endif
 
 LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
 LOCAL_CFLAGS += -DUSE_UBIFS
-LOCAL_C_INCLUDES += external/mtd-utils/new-utils/include/
+LOCAL_C_INCLUDES += external/mtd-utils/new-utils/include/ system/vold
 LOCAL_STATIC_LIBRARIES += libubi
 LOCAL_SRC_FILES += ubi.cpp
 
