@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 The Android Open Source Project
+ * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,15 +100,18 @@ static GRSurface* fbdev_init(minui_backend* backend) {
         return NULL;
     }
 
-    vi.red.offset     = 0;
-    vi.red.length     = 8;
-    vi.green.offset   = 8;
-    vi.green.length   = 8;
-    vi.blue.offset    = 16;
-    vi.blue.length    = 8;
-    vi.transp.offset  = 24;
-    vi.transp.length  = 8;
+    vi.red.offset     = 11;
+    vi.red.length     = 5;
+    vi.green.offset   = 5;
+    vi.green.length   = 6;
+    vi.blue.offset    = 0;
+    vi.blue.length    = 5;
+    vi.transp.offset  = 0;
+    vi.transp.length  = 0;
+    vi.bits_per_pixel = 16;
+    vi.xres_virtual = vi.xres;
     vi.yres_virtual = vi.yres * 2;
+    vi.activate = FB_ACTIVATE_NOW;
 
     if (ioctl(fd, FBIOPUT_VSCREENINFO, &vi) < 0) {
         perror("failed to put fb0 info");
