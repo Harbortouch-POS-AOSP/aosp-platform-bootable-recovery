@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014 Freescale Semiconductor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,20 +26,10 @@ extern "C" int ubiVolumeFormat(char *location)
     libubi_t libubi;
     struct ubi_vol_info vol_info;
     int fd;
-    libubi = libubi_open(1);
+    libubi = libubi_open();
 
     if (libubi == NULL) {
         fprintf(stderr, "can not open libubi");
-        goto done;
-    }
-
-    ret = ubi_node_type(libubi, location);
-    if (ret == 1) {
-        fprintf(stderr, "%s is a ubi device node, not a ubi volume node",
-                location);
-        goto done;
-    } else if (ret < 0) {
-        fprintf(stderr, "%s is not a UBI volume node", location);
         goto done;
     }
 

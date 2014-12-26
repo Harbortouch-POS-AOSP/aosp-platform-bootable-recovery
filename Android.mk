@@ -89,7 +89,7 @@ endif
 
 LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)/sbin
 LOCAL_CFLAGS += -DUSE_UBIFS
-LOCAL_C_INCLUDES += external/mtd-utils/new-utils/include/ system/vold
+LOCAL_C_INCLUDES += external/mtd-utils/ubi-utils/include external/mtd-utils/include system/vold
 LOCAL_STATIC_LIBRARIES += libubi
 LOCAL_SRC_FILES += ubi.cpp
 
