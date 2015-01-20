@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 The Android Open Source Project
+ * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,6 +107,12 @@ void ScreenRecoveryUI::draw_background_locked(Icon icon) {
 
         iconX = (gr_fb_width() - iconWidth) / 2;
         iconY = (gr_fb_height() - (iconHeight+textHeight+40+sh)) / 2;
+        if (iconX < 0) {
+            iconX = 0;
+        }
+        if (iconY < 0) {
+            iconY = 0;
+        }
 
         int textX = (gr_fb_width() - textWidth) / 2;
         int textY = ((gr_fb_height() - (iconHeight+textHeight+40+sh)) / 2) + iconHeight + 40;
