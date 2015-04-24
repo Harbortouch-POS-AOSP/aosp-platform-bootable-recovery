@@ -145,7 +145,6 @@ void gr_texticon(int x, int y, GRSurface* icon) {
 
     x += overscan_offset_x;
     y += overscan_offset_y;
-
     if (outside(x, y) || outside(x+icon->width-1, y+icon->height-1)) return;
 
     unsigned char* src_p = icon->data;
@@ -233,22 +232,22 @@ void gr_blit(GRSurface* source, int sx, int sy, int w, int h, int dx, int dy) {
     dx += overscan_offset_x;
     dy += overscan_offset_y;
 
-    if (outside(dx, dy) || outside(dx+w-1, dy+h-1)) return;
 
     unsigned char* src_p = source->data + sy*source->row_bytes + sx*source->pixel_bytes;
     unsigned char* dst_p = gr_draw->data + dy*gr_draw->row_bytes + dx*gr_draw->pixel_bytes;
-
+    unsigned int icon_screen_height_ratio = h / (gr_fb_height() - (33 + 40)) + 1; 
+    unsigned int icon_screen_width_ratio = w / (gr_fb_width()) + 1; 
     int x, y;
-    for (y = 0; y < h; ++y) {
+    for (y = 0; y < h / icon_screen_height_ratio; ++y) {
         unsigned int *psx = (unsigned int*)src_p;
         unsigned short *pdx = (unsigned short*)dst_p;
-        for (x=0; x < w; ++x) {
+        for (x=0; x < w / icon_screen_width_ratio; ++x) {
             unsigned int sv = *psx;
             *pdx = (unsigned short)(((sv << 8)&0xf800) | ((sv>>5)&0x07e0) | ((sv>>19)&0x001f));
             pdx++;
-            psx++;
+            psx += icon_screen_width_ratio;
         }
-        src_p += source->row_bytes;
+        src_p += icon_screen_height_ratio * source->row_bytes;
         dst_p += gr_draw->row_bytes;
     }
 }

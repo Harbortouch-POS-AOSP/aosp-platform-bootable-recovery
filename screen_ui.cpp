@@ -41,6 +41,8 @@
 
 static int char_width;
 static int char_height;
+static int icon_screen_height_ratio = 1;
+static int icon_screen_width_ratio = 1;
 
 // Return the current time as a double (including fractions of a second).
 static double now() {
@@ -102,21 +104,15 @@ void ScreenRecoveryUI::draw_background_locked(Icon icon) {
         int textWidth = gr_get_width(text_surface);
         int textHeight = gr_get_height(text_surface);
         int stageHeight = gr_get_height(stageMarkerEmpty);
-
         int sh = (max_stage >= 0) ? stageHeight : 0;
+	icon_screen_height_ratio = iconHeight / (gr_fb_height() - (textHeight + 40)) + 1;
+	icon_screen_width_ratio = iconWidth / (gr_fb_width()) + 1;
 
-        iconX = (gr_fb_width() - iconWidth) / 2;
-        iconY = (gr_fb_height() - (iconHeight+textHeight+40+sh)) / 2;
-        if (iconX < 0) {
-            iconX = 0;
-        }
-        if (iconY < 0) {
-            iconY = 0;
-        }
+        iconX = (gr_fb_width() - iconWidth / icon_screen_width_ratio) / 2;
+        iconY = (gr_fb_height() - (iconHeight / icon_screen_height_ratio + textHeight + 40)) / 2;
 
-        int textX = (gr_fb_width() - textWidth) / 2;
-        int textY = ((gr_fb_height() - (iconHeight+textHeight+40+sh)) / 2) + iconHeight + 40;
-
+        int textX = (gr_fb_width() - textWidth / icon_screen_width_ratio) / 2;
+        int textY = iconY + iconHeight / icon_screen_height_ratio + 40;
         if (progressBarType != EMPTY) {
             int progressHeight = gr_get_height(progressBarEmpty);
             //Be sure to align below with draw_progress_locked();
