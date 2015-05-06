@@ -38,7 +38,9 @@
 #include "minui/minui.h"
 #include "screen_ui.h"
 #include "ui.h"
-
+#define TEXT_HEIGHT 33
+#define ICON_TEXT_HEIGHT 20
+#define TEXT_PROGRESSBAR_HEIGHT 10
 static int char_width;
 static int char_height;
 static int icon_screen_height_ratio = 1;
@@ -112,7 +114,7 @@ void ScreenRecoveryUI::draw_background_locked(Icon icon) {
         iconY = (gr_fb_height() - (iconHeight / icon_screen_height_ratio + textHeight + 40)) / 2;
 
         int textX = (gr_fb_width() - textWidth / icon_screen_width_ratio) / 2;
-        int textY = iconY + iconHeight / icon_screen_height_ratio + 40;
+        int textY = iconY + iconHeight / icon_screen_height_ratio + ICON_TEXT_HEIGHT;
         if (progressBarType != EMPTY) {
             int progressHeight = gr_get_height(progressBarEmpty);
             //Be sure to align below with draw_progress_locked();
@@ -159,7 +161,9 @@ void ScreenRecoveryUI::draw_progress_locked() {
         int height = gr_get_height(progressBarEmpty);
 
         int dx = (gr_fb_width() - width)/2;
-        int dy = (3*gr_fb_height() + iconHeight - 2*height)/4;
+        int dy = (gr_fb_height() - (iconHeight / icon_screen_height_ratio + TEXT_HEIGHT + 40)) / 2 + 
+		 iconHeight / icon_screen_height_ratio + ICON_TEXT_HEIGHT + TEXT_HEIGHT + 
+		 TEXT_PROGRESSBAR_HEIGHT - height / 2; 
 
         // Erase behind the progress bar (in case this was a progress-only update)
         gr_color(0, 0, 0, 255);
