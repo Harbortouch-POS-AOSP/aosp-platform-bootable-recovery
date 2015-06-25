@@ -601,6 +601,112 @@ Value* PackageExtractFileFn(const char* name, State* state,
     }
 }
 
+// package_extract_bootloader(package_path, destination_path)
+//   or
+// package_extract_bootloader(package_path)
+//  bootloader's offset is 1k, So  need to set current position to 1K before write uboot.
+//  bootloader partition is read only.
+Value* PackageExtractBootloaderFn(const char* name, State* state,
+                           int argc, Expr* argv[]) {
+    if (argc < 1 || argc > 2) {
+        return ErrorAbort(state, "%s() expects 1 or 2 args, got %d",
+                          name, argc);
+    }
+    bool success = false;
+    int fdm;
+    int fd_force_ro;
+    int fd_boot_config;
+    char content[2];
+    char file_force_ro[50];
+    char file_boot_config[50];
+    UpdaterInfo* ui = (UpdaterInfo*)(state->cookie);
+
+    if (argc == 2) {
+        // The two-argument version extracts to a file.
+
+        ZipArchive* za = ((UpdaterInfo*)(state->cookie))->package_zip;
+
+        char* zip_path;
+        char* dest_path;
+        if (ReadArgs(state, argv, 2, &zip_path, &dest_path) < 0) return NULL;
+
+        const ZipEntry* entry = mzFindZipEntry(za, zip_path);
+        if (entry == NULL) {
+            printf("%s: no %s in package\n", name, zip_path);
+            goto done2;
+        }
+	// the partition of uboot(EMMC) is read only, So should set force_ro to 0
+	// set boot_config to 8 which set boot0 as first boot partition.
+	strcpy(file_force_ro,"/sys/block/mmcblk3boot0/force_ro");
+	strcpy(file_boot_config,"/sys/block/mmcblk3/device/boot_config");
+	file_force_ro[17] = dest_path[17];
+	file_boot_config[17] = dest_path[17];
+	fd_force_ro = open(file_force_ro,O_RDWR);
+	fd_boot_config = open(file_boot_config,O_RDWR);
+        FILE* f = fopen(dest_path, "wb");
+        if (f == NULL) {
+            printf("%s: can't open %s for write: %s\n",
+                    name, dest_path, strerror(errno));
+            goto done2;
+        }
+	fdm = fileno(f);
+	sprintf(content, "%d", 0);
+	write(fd_force_ro, content, strlen(content));
+	// The  offset of uboot is 1K
+	lseek(fdm , 1024, SEEK_SET);
+        success = mzExtractZipEntryToFile(za, entry, fdm);
+	sprintf(content, "%d", 1);
+	write(fd_force_ro,content,strlen(content));
+	sprintf(content, "%d", 8);
+	write(fd_boot_config,content,strlen(content));
+	close(fd_force_ro);
+	close(fd_boot_config);
+        fclose(f);
+
+      done2:
+        free(zip_path);
+        free(dest_path);
+        return StringValue(strdup(success ? "t" : ""));
+    } else {
+        // The one-argument version returns the contents of the file
+        // as the result.
+
+        char* zip_path;
+        Value* v = malloc(sizeof(Value));
+        v->type = VAL_BLOB;
+        v->size = -1;
+        v->data = NULL;
+
+        if (ReadArgs(state, argv, 1, &zip_path) < 0) return NULL;
+
+        ZipArchive* za = ((UpdaterInfo*)(state->cookie))->package_zip;
+        const ZipEntry* entry = mzFindZipEntry(za, zip_path);
+        if (entry == NULL) {
+            printf("%s: no %s in package\n", name, zip_path);
+            goto done1;
+        }
+
+        v->size = mzGetZipEntryUncompLen(entry);
+        v->data = malloc(v->size);
+        if (v->data == NULL) {
+            printf("%s: failed to allocate %ld bytes for %s\n",
+                    name, (long)v->size, zip_path);
+            goto done1;
+        }
+
+        success = mzExtractZipEntryToBuffer(za, entry,
+                                            (unsigned char *)v->data);
+
+      done1:
+        free(zip_path);
+        if (!success) {
+            free(v->data);
+            v->data = NULL;
+            v->size = -1;
+        }
+        return v;
+    }
+}
 // Create all parent directories of name, if necessary.
 static int make_parents(char* name) {
     char* p;
@@ -1141,6 +1247,98 @@ done:
     return StringValue(result);
 }
 
+Value* WriteRawBootloaderFn(const char* name, State* state, int argc, Expr* argv[]) {
+    char* result = NULL;
+    char *bootloader_head;
+    Value* partition_value;
+    Value* contents;
+    if (ReadValueArgs(state, argv, 2, &contents, &partition_value) < 0) {
+        return NULL;
+    }
+
+    char* partition = NULL;
+    if (partition_value->type != VAL_STRING) {
+        ErrorAbort(state, "partition argument to %s must be string", name);
+        goto done;
+    }
+    partition = partition_value->data;
+    if (strlen(partition) == 0) {
+        ErrorAbort(state, "partition argument to %s can't be empty", name);
+        goto done;
+    }
+    if (contents->type == VAL_STRING && strlen((char*) contents->data) == 0) {
+        ErrorAbort(state, "file argument to %s can't be empty", name);
+        goto done;
+    }
+
+    mtd_scan_partitions();
+    const MtdPartition* mtd = mtd_find_partition_by_name(partition);
+    if (mtd == NULL) {
+        printf("%s: no mtd partition named \"%s\"\n", name, partition);
+        result = strdup("");
+        goto done;
+    }
+
+    MtdWriteContext* ctx = mtd_write_bootloader_partition(mtd);
+    if (ctx == NULL) {
+        printf("%s: can't write mtd partition \"%s\"\n",
+                name, partition);
+        result = strdup("");
+        goto done;
+    }
+
+    bool success;
+    unsigned int total_offset = 1024;
+    if (contents->type == VAL_STRING) {
+        // we're given a filename as the contents
+        char* filename = contents->data;
+        FILE* f = fopen(filename, "rb");
+        if (f == NULL) {
+            printf("%s: can't open %s: %s\n",
+                    name, filename, strerror(errno));
+            result = strdup("");
+            goto done;
+        }
+	bootloader_head = malloc(512000);
+	memset(bootloader_head, 0, 512000);
+        success = true;
+        char* buffer = malloc(BUFSIZ);
+        int read;
+        while ((read = fread(buffer, 1, BUFSIZ, f)) > 0) {
+            memcpy(bootloader_head+total_offset, buffer, read);
+            total_offset = total_offset + read;
+        }
+	mtd_write_data(ctx, bootloader_head, total_offset);
+        free(buffer);
+        fclose(f);
+	free(bootloader_head);
+    } else {
+        // we're given a blob as the contents
+        ssize_t wrote = mtd_write_data(ctx, contents->data, contents->size);
+        success = (wrote == contents->size);
+    }
+    if (!success) {
+        printf("mtd_write_data to %s failed: %s\n",
+                partition, strerror(errno));
+    }
+
+    if (mtd_erase_blocks(ctx, -1) == -1) {
+        printf("%s: error erasing blocks of %s\n", name, partition);
+    }
+    if (mtd_write_close(ctx) != 0) {
+        printf("%s: error closing write of %s\n", name, partition);
+    }
+
+    printf("%s %s partition\n",
+           success ? "wrote" : "failed to write", partition);
+
+    result = success ? partition : strdup("");
+
+done:
+    if (result != partition) FreeValue(partition_value);
+    FreeValue(contents);
+    return StringValue(result);
+}
 // apply_patch_space(bytes)
 Value* ApplyPatchSpaceFn(const char* name, State* state,
                          int argc, Expr* argv[]) {
@@ -1612,6 +1810,8 @@ void RegisterInstallFunctions() {
     RegisterFunction("getprop", GetPropFn);
     RegisterFunction("file_getprop", FileGetPropFn);
     RegisterFunction("write_raw_image", WriteRawImageFn);
+    RegisterFunction("write_raw_bootloader_image", WriteRawBootloaderFn);
+    RegisterFunction("package_extract_bootloader", PackageExtractBootloaderFn);
 
     RegisterFunction("apply_patch", ApplyPatchFn);
     RegisterFunction("apply_patch_check", ApplyPatchCheckFn);
