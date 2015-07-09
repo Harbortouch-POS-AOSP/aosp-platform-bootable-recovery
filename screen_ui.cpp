@@ -109,11 +109,12 @@ void ScreenRecoveryUI::draw_background_locked(Icon icon) {
         int sh = (max_stage >= 0) ? stageHeight : 0;
 	icon_screen_height_ratio = iconHeight / (gr_fb_height() - (textHeight + 40)) + 1;
 	icon_screen_width_ratio = iconWidth / (gr_fb_width()) + 1;
-
+	icon_screen_height_ratio = icon_screen_height_ratio > icon_screen_width_ratio ? icon_screen_height_ratio:icon_screen_width_ratio;
+	icon_screen_width_ratio = icon_screen_height_ratio;
         iconX = (gr_fb_width() - iconWidth / icon_screen_width_ratio) / 2;
         iconY = (gr_fb_height() - (iconHeight / icon_screen_height_ratio + textHeight + 40)) / 2;
 
-        int textX = (gr_fb_width() - textWidth / icon_screen_width_ratio) / 2;
+        int textX = (gr_fb_width() - textWidth) / 2;
         int textY = iconY + iconHeight / icon_screen_height_ratio + ICON_TEXT_HEIGHT;
         if (progressBarType != EMPTY) {
             int progressHeight = gr_get_height(progressBarEmpty);

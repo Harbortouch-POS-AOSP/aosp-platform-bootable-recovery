@@ -238,6 +238,8 @@ void gr_blit(GRSurface* source, int sx, int sy, int w, int h, int dx, int dy) {
     unsigned int icon_screen_height_ratio = h / (gr_fb_height() - (33 + 40)) + 1; 
     unsigned int icon_screen_width_ratio = w / (gr_fb_width()) + 1; 
     int x, y;
+    icon_screen_height_ratio = icon_screen_height_ratio > icon_screen_width_ratio ? icon_screen_height_ratio:icon_screen_width_ratio;
+    icon_screen_width_ratio = icon_screen_height_ratio;
     for (y = 0; y < h / icon_screen_height_ratio; ++y) {
         unsigned int *psx = (unsigned int*)src_p;
         unsigned short *pdx = (unsigned short*)dst_p;
