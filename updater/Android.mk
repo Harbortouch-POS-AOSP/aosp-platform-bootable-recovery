@@ -84,7 +84,7 @@ LOCAL_CFLAGS += -DUSE_UBIFS
 LOCAL_C_INCLUDES += external/mtd-utils/ubi-utils/include/ ./external/mtd-utils/include/
 LOCAL_STATIC_LIBRARIES += libubi
 LOCAL_SRC_FILES += ../ubi.cpp
-
+LOCAL_REQUIRED_MODULES := ubiupdatevol
 inc :=
 inc_dep_file :=
 

@@ -93,6 +93,7 @@ LOCAL_C_INCLUDES += external/mtd-utils/ubi-utils/include external/mtd-utils/incl
 LOCAL_STATIC_LIBRARIES += libubi
 LOCAL_SRC_FILES += ubi.cpp
 
+LOCAL_REQUIRED_MODULES := ubiupdatevol
 ifeq ($(HAVE_SELINUX), true)
   LOCAL_C_INCLUDES += external/libselinux/include
   LOCAL_STATIC_LIBRARIES += libselinux

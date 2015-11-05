@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,42 +18,42 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <libubi.h>
+#include <cutils/log.h>
+#include<unistd.h>
+
+
+static int exec_cmd(const char* path, char* const argv[]) {
+    int status;
+    pid_t child;
+    int ret;
+    if ((child = vfork()) == 0) {
+        ret = execv(path, argv);
+	if (ret < 0)
+		printf("exec_cmd errno is %d\n",errno);
+        _exit(0);
+    }
+    waitpid(child, &status, 0);
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        printf("%s failed with status %d\n", path, WEXITSTATUS(status));
+    }
+    return WEXITSTATUS(status);
+}
 
 extern "C" int ubiVolumeFormat(char *location)
 {
     int ret = -1;
-    libubi_t libubi;
-    struct ubi_vol_info vol_info;
-    int fd;
-    libubi = libubi_open();
+    const char *ubiupdatevol = "/sbin/ubiupdatevol";
+    const char* args[] = {"ubiupdatevol", location, "-t", NULL};
+    printf("Formatting %s\n",location);
 
-    if (libubi == NULL) {
-        fprintf(stderr, "can not open libubi");
-        goto done;
-    }
-
-    ret = ubi_get_vol_info(libubi, location, &vol_info);
-    if (ret) {
-        fprintf(stderr, "can not get information about UBI volume %s", location);
-        goto done;
-    }
-
-    fd = open(location, O_RDWR);
-    if (fd == -1) {
-        fprintf(stderr, "can not open %s", location);
-        goto done;
-    }
-
-    ret = ubi_update_start(libubi, fd, 0);
-    if (ret) {
-        fprintf(stderr, "cannot truncate volume %s", location);
-        close(fd);
-        goto done;
-    }
-
-    close(fd);
-
+    ret = exec_cmd(ubiupdatevol, (char* const*)args);
+    if (ret != 0) {
+	printf("format_volume %s failed\n",location);
+	return -1;
+    }	
   done:
     return ret;
 }
