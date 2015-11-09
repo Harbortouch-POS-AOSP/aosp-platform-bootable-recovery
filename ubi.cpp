@@ -20,9 +20,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <libubi.h>
 #include <cutils/log.h>
 #include<unistd.h>
+#include <errno.h>
 
 
 static int exec_cmd(const char* path, char* const argv[]) {
