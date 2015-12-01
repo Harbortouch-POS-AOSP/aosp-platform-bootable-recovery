@@ -66,8 +66,6 @@ static MtdState g_mtd_state = {
 };
 
 #define MTD_PROC_FILENAME   "/proc/mtd"
-//The offset of bootloader in nand chip(MT29F64G08AFAAA) is 36M.
-#define BOOTLOADER_OFFSET 37748736 
 int
 mtd_scan_partitions()
 {
@@ -395,7 +393,7 @@ MtdWriteContext *mtd_write_partition(const MtdPartition *partition)
     return ctx;
 }
 
-MtdWriteContext *mtd_write_bootloader_partition(const MtdPartition *partition)
+MtdWriteContext *mtd_write_bootloader_partition(const MtdPartition *partition, off_t offset)
 {
     MtdWriteContext *ctx = (MtdWriteContext*) malloc(sizeof(MtdWriteContext));
     if (ctx == NULL) return NULL;
@@ -418,7 +416,7 @@ MtdWriteContext *mtd_write_bootloader_partition(const MtdPartition *partition)
         free(ctx);
         return NULL;
     }
-    lseek(ctx->fd, BOOTLOADER_OFFSET, SEEK_SET);
+    lseek(ctx->fd, offset, SEEK_SET);
     ctx->partition = partition;
     ctx->stored = 0;
     return ctx;

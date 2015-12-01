@@ -57,6 +57,11 @@
 #include "ubi.h"
 #endif
 
+//The offset of bootloader firmware2 is 36M.
+//The offset of bootloader firmware1 is 8M.
+#define BOOTLOADER_OFFSET_FIRMWARE2 37748736
+#define BOOTLOADER_OFFSET_FIRMWARE1 8388608
+
 void uiPrint(State* state, char* buffer) {
     char* line = strtok(buffer, "\n");
     UpdaterInfo* ui = (UpdaterInfo*)(state->cookie);
@@ -1247,9 +1252,59 @@ done:
     return StringValue(result);
 }
 
+char *write_bootloader_nand(const MtdPartition *mtd, off_t offset, Value* contents, char *partition) {
+    char *result;
+    char *bootloader_head;
+    MtdWriteContext* ctx = mtd_write_bootloader_partition(mtd, offset);
+    if (ctx == NULL) {
+    	printf("can't write mtd partition \"%s\"\n",
+		  partition);
+	return 0;
+    }
+    bool success;
+    unsigned int total_offset = 1024;
+    if (contents->type == VAL_STRING) {
+    // we're given a filename as the contents
+    char* filename = contents->data;
+    FILE* f = fopen(filename, "rb");
+    if (f == NULL) {
+	printf("can't open %s: %s\n",
+		filename, strerror(errno));
+	return 0;
+    }
+    bootloader_head = malloc(512000);
+    memset(bootloader_head, 0, 512000);
+    success = true;
+    char* buffer = malloc(BUFSIZ);
+    int read;
+    while ((read = fread(buffer, 1, BUFSIZ, f)) > 0) {
+	memcpy(bootloader_head+total_offset, buffer, read);
+	total_offset = total_offset + read;
+    }
+    mtd_write_data(ctx, bootloader_head, total_offset);
+    free(buffer);
+    fclose(f);
+    free(bootloader_head);
+    } else {
+    	// we're given a blob as the contents
+    	ssize_t wrote = mtd_write_data(ctx, contents->data, contents->size);
+    	if ( wrote != contents->size )
+	return 0;
+    }
+    if (mtd_erase_blocks(ctx, -1) == -1) {
+    	 printf("error erasing blocks of %s\n",partition);
+    }
+    if (mtd_write_close(ctx) != 0) {
+	printf("error closing write of %s\n",partition);
+    }
+    printf("%s %s partition\n",
+	success ? "wrote" : "failed to write",partition);
+    result = success ? partition : strdup("");
+
+    return result;
+}
 Value* WriteRawBootloaderFn(const char* name, State* state, int argc, Expr* argv[]) {
     char* result = NULL;
-    char *bootloader_head;
     Value* partition_value;
     Value* contents;
     if (ReadValueArgs(state, argv, 2, &contents, &partition_value) < 0) {
@@ -1278,62 +1333,17 @@ Value* WriteRawBootloaderFn(const char* name, State* state, int argc, Expr* argv
         result = strdup("");
         goto done;
     }
-
-    MtdWriteContext* ctx = mtd_write_bootloader_partition(mtd);
-    if (ctx == NULL) {
-        printf("%s: can't write mtd partition \"%s\"\n",
-                name, partition);
-        result = strdup("");
-        goto done;
+    result = write_bootloader_nand(mtd, BOOTLOADER_OFFSET_FIRMWARE1, contents, partition);
+    if (result == 0) {
+	printf("write firmware1 error\n");
+	goto done;
     }
-
-    bool success;
-    unsigned int total_offset = 1024;
-    if (contents->type == VAL_STRING) {
-        // we're given a filename as the contents
-        char* filename = contents->data;
-        FILE* f = fopen(filename, "rb");
-        if (f == NULL) {
-            printf("%s: can't open %s: %s\n",
-                    name, filename, strerror(errno));
-            result = strdup("");
-            goto done;
-        }
-	bootloader_head = malloc(512000);
-	memset(bootloader_head, 0, 512000);
-        success = true;
-        char* buffer = malloc(BUFSIZ);
-        int read;
-        while ((read = fread(buffer, 1, BUFSIZ, f)) > 0) {
-            memcpy(bootloader_head+total_offset, buffer, read);
-            total_offset = total_offset + read;
-        }
-	mtd_write_data(ctx, bootloader_head, total_offset);
-        free(buffer);
-        fclose(f);
-	free(bootloader_head);
-    } else {
-        // we're given a blob as the contents
-        ssize_t wrote = mtd_write_data(ctx, contents->data, contents->size);
-        success = (wrote == contents->size);
+    result = write_bootloader_nand(mtd, BOOTLOADER_OFFSET_FIRMWARE2, contents, partition);
+    if (result == 0) {
+	printf("write firmware1 error\n");
+	goto done;
     }
-    if (!success) {
-        printf("mtd_write_data to %s failed: %s\n",
-                partition, strerror(errno));
-    }
-
-    if (mtd_erase_blocks(ctx, -1) == -1) {
-        printf("%s: error erasing blocks of %s\n", name, partition);
-    }
-    if (mtd_write_close(ctx) != 0) {
-        printf("%s: error closing write of %s\n", name, partition);
-    }
-
-    printf("%s %s partition\n",
-           success ? "wrote" : "failed to write", partition);
-
-    result = success ? partition : strdup("");
-
+	  
 done:
     if (result != partition) FreeValue(partition_value);
     FreeValue(contents);
