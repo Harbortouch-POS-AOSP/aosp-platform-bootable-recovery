@@ -36,32 +36,18 @@
 static RecoveryUI* ui = NULL;
 
 static void
-set_usb_driver(bool enabled) {
-    int fd = open("/sys/class/android_usb/android0/enable", O_WRONLY);
-    if (fd < 0) {
-        ui->Print("failed to open driver control: %s\n", strerror(errno));
-        return;
-    }
-    if (TEMP_FAILURE_RETRY(write(fd, enabled ? "1" : "0", 1)) == -1) {
-        ui->Print("failed to set driver control: %s\n", strerror(errno));
-    }
-    if (close(fd) < 0) {
-        ui->Print("failed to close driver control: %s\n", strerror(errno));
-    }
-}
-
-static void
 stop_adbd() {
+    /* For 4.1 kernel:
+     * "start adbd" will trigger sys.usb.ffs.ready=1 to bind ffs driver;
+     * "stop adbd" will unbind ffs driver, need below process */
     property_set("ctl.stop", "adbd");
-    set_usb_driver(false);
+    property_set("sys.usb.ffs.ready", "0");
 }
-
 
 static void
 maybe_restart_adbd() {
     if (is_ro_debuggable()) {
         ui->Print("Restarting adbd...\n");
-        set_usb_driver(true);
         property_set("ctl.start", "adbd");
     }
 }
@@ -77,7 +63,6 @@ apply_from_adb(RecoveryUI* ui_, bool* wipe_cache, const char* install_file) {
     ui = ui_;
 
     stop_adbd();
-    set_usb_driver(true);
 
     ui->Print("\n\nNow send the package you want to apply\n"
               "to the device with \"adb sideload <filename>\"...\n");
@@ -137,7 +122,6 @@ apply_from_adb(RecoveryUI* ui_, bool* wipe_cache, const char* install_file) {
         }
     }
 
-    set_usb_driver(false);
     maybe_restart_adbd();
 
     return result;
