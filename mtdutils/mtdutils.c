@@ -416,7 +416,9 @@ MtdWriteContext *mtd_write_bootloader_partition(const MtdPartition *partition, o
         free(ctx);
         return NULL;
     }
-    lseek(ctx->fd, offset, SEEK_SET);
+    if (TEMP_FAILURE_RETRY(lseek(ctx->fd, offset, SEEK_SET)) != offset)
+        printf("Set offset failed at  0x%08lx (%s)\n",
+                offset, strerror(errno));
     ctx->partition = partition;
     ctx->stored = 0;
     return ctx;
