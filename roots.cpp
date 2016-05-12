@@ -67,13 +67,17 @@ static int get_block_device_size(const char *filename, long long *block_size)
     }
 
     ret = fstat(fd, &buf);
-    if (ret)
+    if (ret) {
+        close(fd);
         return -1;
+    }
 
     if (S_ISBLK(buf.st_mode)) {
         ret = ioctl(fd, BLKGETSIZE64, block_size);
-        if (ret)
+        if (ret) {
+            close(fd);
             return -1;
+        }
     }
 
     if (*block_size < 0) {
