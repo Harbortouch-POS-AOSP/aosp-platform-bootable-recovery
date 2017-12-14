@@ -69,8 +69,8 @@ ScreenRecoveryUI::ScreenRecoveryUI() :
     text_col_(0),
     text_row_(0),
     text_top_(0),
-    show_text(false),
-    show_text_ever(false),
+    show_text(true),
+    show_text_ever(true),
     menu_(nullptr),
     show_menu(false),
     menu_items(0),
@@ -269,8 +269,12 @@ void ScreenRecoveryUI::draw_screen_locked() {
             char recovery_fingerprint[PROPERTY_VALUE_MAX];
             property_get("ro.bootimage.build.fingerprint", recovery_fingerprint, "");
 
+            char recovery_build_date[PROPERTY_VALUE_MAX];
+            property_get("ro.build.date", recovery_build_date, "");
+
             SetColor(INFO);
-            DrawTextLine(&y, "Android Recovery", true);
+            DrawTextLine(&y, "Harbortouch Recovery", true);
+            DrawTextLine(&y, recovery_build_date, false);
             for (auto& chunk : android::base::Split(recovery_fingerprint, ":")) {
                 DrawTextLine(&y, chunk.c_str(), false);
             }

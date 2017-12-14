@@ -56,6 +56,7 @@ class RecoveryUI {
     // --- text log ---
 
     virtual void ShowText(bool visible) = 0;
+    virtual void PutChar(char ch) = 0;
 
     virtual bool IsTextVisible() = 0;
 

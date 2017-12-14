@@ -344,6 +344,7 @@ static void copy_logs() {
     // actual attempts to modify the flash, such as wipes, installs from BCB
     // or menu selections. This is to avoid unnecessary rotation (and
     // possible deletion) of log files, if it does not do anything loggable.
+    LOGUI("Copy log files...\n");
     if (!modified_flash) {
         return;
     }
@@ -370,6 +371,7 @@ static void copy_logs() {
 // this function is idempotent: call it as many times as you like.
 static void
 finish_recovery(const char *send_intent) {
+    LOGUI("Finish recovery %s\n", send_intent);
     // By this point, we're ready to return to the main system...
     if (send_intent != NULL) {
         FILE *fp = fopen_path(INTENT_FILE, "w");
@@ -418,6 +420,7 @@ typedef struct _saved_log_file {
 } saved_log_file;
 
 static bool erase_volume(const char* volume) {
+    LOGUI("Erase volume %s\n", volume);
     bool is_cache = (strcmp(volume, CACHE_ROOT) == 0);
 
     ui->SetBackground(RecoveryUI::ERASING);
@@ -778,6 +781,7 @@ static int apply_from_sdcard(Device* device, bool* wipe_cache) {
 // on if the --shutdown_after flag was passed to recovery.
 static Device::BuiltinAction
 prompt_and_wait(Device* device, int status) {
+    LOGUI("Prompt and wait...\n");
     for (;;) {
         finish_recovery(NULL);
         switch (status) {
@@ -930,7 +934,7 @@ main(int argc, char **argv) {
     const char *update_package = NULL;
     bool should_wipe_data = false;
     bool should_wipe_cache = false;
-    bool show_text = false;
+    bool show_text = true;
     bool sideload = false;
     bool sideload_auto_reboot = false;
     bool just_exit = false;
@@ -1023,7 +1027,14 @@ main(int argc, char **argv) {
     property_list(print_property, NULL);
     printf("\n");
 
+    ui->Print("Welcome to Harbortouch recovery!\n");
     ui->Print("Supported API: %d\n", RECOVERY_API_VERSION);
+    ui->Print("Recovery started with args:");
+    for (int i = 0; i < argc; i++)
+    {
+        ui->Print(" %s", argv[i]);
+    }
+    ui->Print("\n");
 
     int status = INSTALL_SUCCESS;
 
@@ -1051,6 +1062,7 @@ main(int argc, char **argv) {
             status = INSTALL_ERROR;
         }
     } else if (sideload) {
+        LOGUI("Sideload mode is enabled\n");
         // 'adb reboot sideload' acts the same as user presses key combinations
         // to enter the sideload mode. When 'sideload-auto-reboot' is used, text
         // display will NOT be turned on by default. And it will reboot after
@@ -1071,6 +1083,7 @@ main(int argc, char **argv) {
             ui->Print("Rebooting automatically.\n");
         }
     } else if (!just_exit) {
+        LOGUI("No command specified\n");
         status = INSTALL_NONE;  // No command specified
         ui->SetBackground(RecoveryUI::NO_COMMAND);
 
@@ -1082,13 +1095,14 @@ main(int argc, char **argv) {
         }
     }
 
+    LOGUI("Checking for errors...\n");
     if (!sideload_auto_reboot && (status == INSTALL_ERROR || status == INSTALL_CORRUPT)) {
         copy_logs();
         ui->SetBackground(RecoveryUI::ERROR);
     }
 
     Device::BuiltinAction after = shutdown_after ? Device::SHUTDOWN : Device::REBOOT;
-    if ((status != INSTALL_SUCCESS && !sideload_auto_reboot) || ui->IsTextVisible()) {
+    if (status != INSTALL_SUCCESS && !sideload_auto_reboot && update_package == NULL) {
         Device::BuiltinAction temp = prompt_and_wait(device, status);
         if (temp != Device::NO_ACTION) {
             after = temp;

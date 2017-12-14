@@ -114,6 +114,7 @@ static bool read_pkcs7(uint8_t* pkcs7_der, size_t pkcs7_der_len, uint8_t** sig_d
 
 int verify_file(unsigned char* addr, size_t length,
                 const Certificate* pKeys, unsigned int numKeys) {
+    LOGUI("Verifying file...\n");
     ui->SetProgress(0.0);
 
     // An archive with a whole-file signature will end in six bytes:
@@ -176,6 +177,7 @@ int verify_file(unsigned char* addr, size_t length,
         return VERIFY_FAILURE;
     }
 
+    LOGUI("Checking EOCD sequences record...\n");
     size_t i;
     for (i = 4; i < eocd_size-3; ++i) {
         if (eocd[i  ] == 0x50 && eocd[i+1] == 0x4b &&
@@ -194,6 +196,7 @@ int verify_file(unsigned char* addr, size_t length,
     bool need_sha1 = false;
     bool need_sha256 = false;
     for (i = 0; i < numKeys; ++i) {
+        LOGUI("Checking SHA %d digest size...\n", i);
         switch (pKeys[i].hash_len) {
             case SHA_DIGEST_SIZE: need_sha1 = true; break;
             case SHA256_DIGEST_SIZE: need_sha256 = true; break;
@@ -207,6 +210,7 @@ int verify_file(unsigned char* addr, size_t length,
 
     double frac = -1.0;
     size_t so_far = 0;
+    LOGUI("Updating SHA value & address");
     while (so_far < signed_len) {
         size_t size = signed_len - so_far;
         if (size > BUFFER_SIZE) size = BUFFER_SIZE;
@@ -219,8 +223,10 @@ int verify_file(unsigned char* addr, size_t length,
         if (f > frac + 0.02 || size == so_far) {
             ui->SetProgress(f);
             frac = f;
+            ui->PutChar('.');
         }
     }
+    LOGUI("\n");
 
     const uint8_t* sha1 = SHA_final(&sha1_ctx);
     const uint8_t* sha256 = SHA256_final(&sha256_ctx);
@@ -241,6 +247,7 @@ int verify_file(unsigned char* addr, size_t length,
      * failure has happened.
      */
     for (i = 0; i < numKeys; ++i) {
+        LOGUI("Checking at least one of the %d keys matches the signature...\n", i);
         const uint8_t* hash;
         switch (pKeys[i].hash_len) {
             case SHA_DIGEST_SIZE: hash = sha1; break;
@@ -326,6 +333,7 @@ int verify_file(unsigned char* addr, size_t length,
 // Returns NULL if the file failed to parse, or if it contain zero keys.
 Certificate*
 load_keys(const char* filename, int* numKeys) {
+    LOGUI("Loading certificate keys %s...\n", filename);
     Certificate* out = NULL;
     *numKeys = 0;
 
@@ -339,6 +347,7 @@ load_keys(const char* filename, int* numKeys) {
         int i;
         bool done = false;
         while (!done) {
+            LOGUI("Reinitial certificate\n");
             ++*numKeys;
             out = (Certificate*)realloc(out, *numKeys * sizeof(Certificate));
             Certificate* cert = out + (*numKeys - 1);
@@ -385,6 +394,7 @@ load_keys(const char* filename, int* numKeys) {
             }
 
             if (cert->key_type == Certificate::RSA) {
+                LOGUI("Certificate RSA founded\n");
                 RSAPublicKey* key = cert->rsa;
                 if (fscanf(f, " %i , 0x%x , { %u",
                            &(key->len), &(key->n0inv), &(key->n[0])) != 3) {
@@ -405,6 +415,7 @@ load_keys(const char* filename, int* numKeys) {
 
                 LOGI("read key e=%d hash=%d\n", key->exponent, cert->hash_len);
             } else if (cert->key_type == Certificate::EC) {
+                LOGUI("Certificate EC founded\n");
                 ECPublicKey* key = cert->ec;
                 int key_len;
                 unsigned int byte;

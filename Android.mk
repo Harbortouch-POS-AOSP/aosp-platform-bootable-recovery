@@ -42,6 +42,8 @@ LOCAL_SRC_FILES := \
     ui.cpp \
     verifier.cpp \
     wear_ui.cpp \
+    minzipwrappers.c \
+    mtdutilswrappers.c \
 
 LOCAL_MODULE := recovery
 
@@ -130,6 +132,7 @@ LOCAL_SRC_FILES := \
     verifier_test.cpp \
     asn1_decoder.cpp \
     verifier.cpp \
+    minzipwrappers.c \
     ui.cpp
 LOCAL_STATIC_LIBRARIES := \
     libmincrypt \

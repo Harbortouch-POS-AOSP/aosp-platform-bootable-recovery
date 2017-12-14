@@ -29,6 +29,7 @@
 #include "mincrypt/sha.h"
 #include "mincrypt/sha256.h"
 #include "minzip/SysUtil.h"
+#include "minzipwrappers.h"
 
 // This is build/target/product/security/testkey.x509.pem after being
 // dumped out by dumpkey.jar.
@@ -147,6 +148,7 @@ class FakeUI : public RecoveryUI {
                            int initial_selection) { }
     int SelectMenu(int sel) { return 0; }
     void EndMenu() { }
+    void PutChar(char) {}
 };
 
 void
@@ -237,7 +239,7 @@ int main(int argc, char **argv) {
     ui = new FakeUI();
 
     MemMapping map;
-    if (sysMapFile(argv[argn], &map) != 0) {
+    if (LOGUI_sysMapFile(argv[argn], &map) != 0) {
         fprintf(stderr, "failed to mmap %s: %s\n", argv[argn], strerror(errno));
         return 4;
     }

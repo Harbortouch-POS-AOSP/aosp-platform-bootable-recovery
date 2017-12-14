@@ -25,16 +25,17 @@
 extern "C" {
 #endif
 
+#define LOGUI(...) ui_print( __VA_ARGS__)
 #define LOGE(...) ui_print("E:" __VA_ARGS__)
-#define LOGW(...) fprintf(stdout, "W:" __VA_ARGS__)
-#define LOGI(...) fprintf(stdout, "I:" __VA_ARGS__)
+#define LOGW(...) ui_print("W:" __VA_ARGS__)
+#define LOGI(...) ui_print("I:" __VA_ARGS__)
 
 #if 0
 #define LOGV(...) fprintf(stdout, "V:" __VA_ARGS__)
 #define LOGD(...) fprintf(stdout, "D:" __VA_ARGS__)
 #else
-#define LOGV(...) do {} while (0)
-#define LOGD(...) do {} while (0)
+#define LOGV(...) ui_print("V:" __VA_ARGS__)
+#define LOGD(...) ui_print("D:" __VA_ARGS__)
 #endif
 
 #define STRINGIFY(x) #x

@@ -21,6 +21,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/select.h>
 #include <unistd.h>
 
 #include "common.h"
@@ -29,8 +31,10 @@
 #include "minui/minui.h"
 #include "minzip/SysUtil.h"
 #include "minzip/Zip.h"
+#include "minzipwrappers.h"
 #include "mtdutils/mounts.h"
 #include "mtdutils/mtdutils.h"
+#include "mtdutilswrappers.h"
 #include "roots.h"
 #include "verifier.h"
 #include "ui.h"
@@ -49,10 +53,11 @@ static const float DEFAULT_IMAGE_PROGRESS_FRACTION = 0.1;
 // If the package contains an update binary, extract it and run it.
 static int
 try_update_binary(const char* path, ZipArchive* zip, bool* wipe_cache) {
+    LOGUI("Trying to update binary %s...\n", path);
     const ZipEntry* binary_entry =
-            mzFindZipEntry(zip, ASSUMED_UPDATE_BINARY_NAME);
+            LOGUI_mzFindZipEntry(zip, ASSUMED_UPDATE_BINARY_NAME);
     if (binary_entry == NULL) {
-        mzCloseZipArchive(zip);
+        LOGUI_mzCloseZipArchive(zip);
         return INSTALL_CORRUPT;
     }
 
@@ -60,13 +65,13 @@ try_update_binary(const char* path, ZipArchive* zip, bool* wipe_cache) {
     unlink(binary);
     int fd = creat(binary, 0755);
     if (fd < 0) {
-        mzCloseZipArchive(zip);
+        LOGUI_mzCloseZipArchive(zip);
         LOGE("Can't make %s\n", binary);
         return INSTALL_ERROR;
     }
-    bool ok = mzExtractZipEntryToFile(zip, binary_entry, fd);
+    bool ok = LOGUI_mzExtractZipEntryToFile(zip, binary_entry, fd);
     close(fd);
-    mzCloseZipArchive(zip);
+    LOGUI_mzCloseZipArchive(zip);
 
     if (!ok) {
         LOGE("Can't copy %s\n", ASSUMED_UPDATE_BINARY_NAME);
@@ -131,6 +136,7 @@ try_update_binary(const char* path, ZipArchive* zip, bool* wipe_cache) {
     args[3] = (char*)path;
     args[4] = NULL;
 
+    LOGUI("Fork recovery process: %s %s %s %s\n", binary, args[1], args[2], args[3]);
     pid_t pid = fork();
     if (pid == 0) {
         umask(022);
@@ -145,51 +151,87 @@ try_update_binary(const char* path, ZipArchive* zip, bool* wipe_cache) {
 
     char buffer[1024];
     FILE* from_child = fdopen(pipefd[0], "r");
-    while (fgets(buffer, sizeof(buffer), from_child) != NULL) {
-        char* command = strtok(buffer, " \n");
-        if (command == NULL) {
-            continue;
-        } else if (strcmp(command, "progress") == 0) {
-            char* fraction_s = strtok(NULL, " \n");
-            char* seconds_s = strtok(NULL, " \n");
+    struct timespec tv;
+    tv.tv_sec = 1;
+    tv.tv_nsec = 0;
+    bool updateBinaryFinish = false;
+    bool updatingBinaryDisplayed = false;
+    int status;
+    while(!waitpid(pid, &status, WNOHANG))
+    {
+        fd_set fds;
+        FD_ZERO(&fds);
+        FD_SET(pipefd[0], &fds);
+        pselect(pipefd[0]+1, &fds, NULL, NULL, &tv, NULL);
+        if(FD_ISSET(pipefd[0], &fds))
+        {
+            if(fgets(buffer, sizeof(buffer), from_child) != NULL)
+            {
+                char* command = strtok(buffer, " \n");
+                if (command == NULL) {
+                    continue;
+                } else if (strcmp(command, "progress") == 0) {
+                    char* fraction_s = strtok(NULL, " \n");
+                    char* seconds_s = strtok(NULL, " \n");
 
-            float fraction = strtof(fraction_s, NULL);
-            int seconds = strtol(seconds_s, NULL, 10);
+                    float fraction = strtof(fraction_s, NULL);
+                    int seconds = strtol(seconds_s, NULL, 10);
 
-            ui->ShowProgress(fraction * (1-VERIFICATION_PROGRESS_FRACTION), seconds);
-        } else if (strcmp(command, "set_progress") == 0) {
-            char* fraction_s = strtok(NULL, " \n");
-            float fraction = strtof(fraction_s, NULL);
-            ui->SetProgress(fraction);
-        } else if (strcmp(command, "ui_print") == 0) {
-            char* str = strtok(NULL, "\n");
-            if (str) {
-                ui->Print("%s", str);
-            } else {
-                ui->Print("\n");
+                    ui->ShowProgress(fraction * (1-VERIFICATION_PROGRESS_FRACTION), seconds);
+                } else if (strcmp(command, "set_progress") == 0) {
+                    char* fraction_s = strtok(NULL, " \n");
+                    float fraction = strtof(fraction_s, NULL);
+                    ui->SetProgress(fraction);
+                } else if (strcmp(command, "ui_print") == 0) {
+                    char* str = strtok(NULL, "\n");
+                    if (str) {
+                       if(updatingBinaryDisplayed)
+                       {
+                           LOGUI("\n");
+                       }
+                        ui->Print("%s", str);
+                    } else {
+                        ui->Print("\n");
+                    }
+                    updatingBinaryDisplayed = false;
+                } else if (strcmp(command, "wipe_cache") == 0) {
+                    *wipe_cache = true;
+                } else if (strcmp(command, "clear_display") == 0) {
+                    ui->SetBackground(RecoveryUI::NONE);
+                } else if (strcmp(command, "enable_reboot") == 0) {
+                    // packages can explicitly request that they want the user
+                    // to be able to reboot during installation (useful for
+                    // debugging packages that don't exit).
+                    ui->SetEnableReboot(true);
+                } else {
+                    LOGE("unknown command [%s]\n", command);
+                }
             }
-            fflush(stdout);
-        } else if (strcmp(command, "wipe_cache") == 0) {
-            *wipe_cache = true;
-        } else if (strcmp(command, "clear_display") == 0) {
-            ui->SetBackground(RecoveryUI::NONE);
-        } else if (strcmp(command, "enable_reboot") == 0) {
-            // packages can explicitly request that they want the user
-            // to be able to reboot during installation (useful for
-            // debugging packages that don't exit).
-            ui->SetEnableReboot(true);
-        } else {
-            LOGE("unknown command [%s]\n", command);
         }
+        else
+        {
+            if(!updatingBinaryDisplayed)
+            {
+                LOGUI("Updating binary");
+                updatingBinaryDisplayed = true;
+            }
+            LOGUI(".");
+        }
+        fflush(stdout);
+    }
+    if(updatingBinaryDisplayed)
+    {
+       LOGUI("\n");
     }
     fclose(from_child);
 
-    int status;
-    waitpid(pid, &status, 0);
+    // process is still valid
+    LOGUI("Waiting for finish update binary process\n");
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         LOGE("Error in %s\n(Status %d)\n", path, WEXITSTATUS(status));
         return INSTALL_ERROR;
     }
+    LOGUI("Updated with result code: %d\n", status);
 
     return INSTALL_SUCCESS;
 }
@@ -197,6 +239,7 @@ try_update_binary(const char* path, ZipArchive* zip, bool* wipe_cache) {
 static int
 really_install_package(const char *path, bool* wipe_cache, bool needs_mount)
 {
+    LOGUI("Really install package %s\n", path);
     ui->SetBackground(RecoveryUI::INSTALLING_UPDATE);
     ui->Print("Finding update package...\n");
     // Give verification half the progress bar...
@@ -216,7 +259,7 @@ really_install_package(const char *path, bool* wipe_cache, bool needs_mount)
     }
 
     MemMapping map;
-    if (sysMapFile(path, &map) != 0) {
+    if (LOGUI_sysMapFile(path, &map) != 0) {
         LOGE("failed to map file\n");
         return INSTALL_CORRUPT;
     }
@@ -237,17 +280,17 @@ really_install_package(const char *path, bool* wipe_cache, bool needs_mount)
     LOGI("verify_file returned %d\n", err);
     if (err != VERIFY_SUCCESS) {
         LOGE("signature verification failed\n");
-        sysReleaseMap(&map);
+        LOGUI_sysReleaseMap(&map);
         return INSTALL_CORRUPT;
     }
 
     /* Try to open the package.
      */
     ZipArchive zip;
-    err = mzOpenZipArchive(map.addr, map.length, &zip);
+    err = LOGUI_mzOpenZipArchive(map.addr, map.length, &zip);
     if (err != 0) {
         LOGE("Can't open %s\n(%s)\n", path, err != -1 ? strerror(err) : "bad");
-        sysReleaseMap(&map);
+        LOGUI_sysReleaseMap(&map);
         return INSTALL_CORRUPT;
     }
 
@@ -257,9 +300,8 @@ really_install_package(const char *path, bool* wipe_cache, bool needs_mount)
     ui->SetEnableReboot(false);
     int result = try_update_binary(path, &zip, wipe_cache);
     ui->SetEnableReboot(true);
-    ui->Print("\n");
 
-    sysReleaseMap(&map);
+    LOGUI_sysReleaseMap(&map);
 
     return result;
 }
@@ -268,8 +310,10 @@ int
 install_package(const char* path, bool* wipe_cache, const char* install_file,
                 bool needs_mount)
 {
+    LOGUI("Install package %s\n", path);
     modified_flash = true;
 
+    LOGUI("Open install log file %s\n", install_file);
     FILE* install_log = fopen_path(install_file, "w");
     if (install_log) {
         fputs(path, install_log);

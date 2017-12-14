@@ -66,9 +66,22 @@ int main(int argc, char** argv) {
     FILE* cmd_pipe = fdopen(fd, "wb");
     setlinebuf(cmd_pipe);
 
+    // Show message on UI function by writing to output UI pipe
+    void UI_print(const char* format, ...)
+    {
+        char buffer[256];
+        va_list ap;
+        va_start(ap, format);
+        vsnprintf(buffer, sizeof(buffer), format, ap);
+        va_end(ap);
+        fprintf(cmd_pipe, "ui_print %s", buffer);
+        fprintf(cmd_pipe, "ui_print\n");
+    }
+
     // Extract the script from the package.
 
     const char* package_filename = argv[3];
+    UI_print("Extract the script from the package\n");
     MemMapping map;
     if (sysMapFile(package_filename, &map) != 0) {
         printf("failed to map package %s\n", argv[3]);
@@ -76,6 +89,7 @@ int main(int argc, char** argv) {
     }
     ZipArchive za;
     int err;
+    UI_print("Open zip archive\n");
     err = mzOpenZipArchive(map.addr, map.length, &za);
     if (err != 0) {
         printf("failed to open package %s: %s\n",
@@ -83,6 +97,7 @@ int main(int argc, char** argv) {
         return 3;
     }
 
+    UI_print("Find zip entry\n");
     const ZipEntry* script_entry = mzFindZipEntry(&za, SCRIPT_NAME);
     if (script_entry == NULL) {
         printf("failed to find %s in %s\n", SCRIPT_NAME, package_filename);
@@ -90,6 +105,7 @@ int main(int argc, char** argv) {
     }
 
     char* script = malloc(script_entry->uncompLen+1);
+    UI_print("Read zip entry\n");
     if (!mzReadZipEntry(&za, script_entry, script, script_entry->uncompLen)) {
         printf("failed to read script from package\n");
         return 5;
@@ -98,16 +114,22 @@ int main(int argc, char** argv) {
 
     // Configure edify's functions.
 
+    UI_print("Register builtins\n");
     RegisterBuiltins();
+    UI_print("Register install functions\n");
     RegisterInstallFunctions();
+    UI_print("Register block image functions\n");
     RegisterBlockImageFunctions();
+    UI_print("Register device extensions\n");
     RegisterDeviceExtensions();
+    UI_print("Finish registration\n");
     FinishRegistration();
 
     // Parse the script.
 
     Expr* root;
     int error_count = 0;
+    UI_print("Parse the script %s\n", script);
     int error = parse_string(script, &root, &error_count);
     if (error != 0 || error_count > 0) {
         printf("%d parse errors\n", error_count);
@@ -118,10 +140,11 @@ int main(int argc, char** argv) {
       { SELABEL_OPT_PATH, "/file_contexts" }
     };
 
+    UI_print("Open SELinux selabel context\n");
     sehandle = selabel_open(SELABEL_CTX_FILE, seopts, 1);
 
     if (!sehandle) {
-        fprintf(cmd_pipe, "ui_print Warning: No file_contexts\n");
+        UI_print("Warning: No file_contexts\n");
     }
 
     // Evaluate the parsed script.
@@ -138,32 +161,39 @@ int main(int argc, char** argv) {
     state.script = script;
     state.errmsg = NULL;
 
+    UI_print("Evaluate the parsed script\n");
     char* result = Evaluate(&state, root);
+    UI_print("Check for errors\n");
     if (result == NULL) {
         if (state.errmsg == NULL) {
             printf("script aborted (no error message)\n");
-            fprintf(cmd_pipe, "ui_print script aborted (no error message)\n");
+            UI_print("Update script aborted (no error message)\n");
         } else {
             printf("script aborted: %s\n", state.errmsg);
             char* line = strtok(state.errmsg, "\n");
             while (line) {
-                fprintf(cmd_pipe, "ui_print %s\n", line);
+                UI_print(" %s\n", line);
                 line = strtok(NULL, "\n");
             }
-            fprintf(cmd_pipe, "ui_print\n");
+            UI_print("\n");
         }
         free(state.errmsg);
         return 7;
     } else {
-        fprintf(cmd_pipe, "ui_print script succeeded\n");
+        UI_print("Update script succeeded!\n");
         free(result);
     }
 
+    UI_print("Package zip file\n");
     if (updater_info.package_zip) {
+        UI_print("Close zip archive\n");
         mzCloseZipArchive(updater_info.package_zip);
     }
+    UI_print("System release file mapping\n");
     sysReleaseMap(&map);
     free(script);
 
+    UI_print("Updater finished work\n");
+    UI_print("end");
     return 0;
 }

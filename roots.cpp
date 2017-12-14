@@ -31,6 +31,7 @@
 #include <fs_mgr.h>
 #include "mtdutils/mtdutils.h"
 #include "mtdutils/mounts.h"
+#include "mtdutilswrappers.h"
 #include "roots.h"
 #include "common.h"
 #include "make_ext4fs.h"
@@ -119,10 +120,12 @@ void load_volume_table()
 }
 
 Volume* volume_for_path(const char* path) {
+    LOGUI("Volume for path: %s\n", path);
     return fs_mgr_get_entry_for_mount_point(fstab, path);
 }
 
 int ensure_path_mounted(const char* path) {
+    LOGUI("Ensure path %s mounted\n", path);
     Volume* v = volume_for_path(path);
     if (v == NULL) {
         LOGE("unknown volume for path [%s]\n", path);
@@ -134,32 +137,33 @@ int ensure_path_mounted(const char* path) {
     }
 
     int result;
-    result = scan_mounted_volumes();
+    result = LOGUI_scan_mounted_volumes();
     if (result < 0) {
         LOGE("failed to scan mounted volumes\n");
         return -1;
     }
 
     const MountedVolume* mv =
-        find_mounted_volume_by_mount_point(v->mount_point);
+        LOGUI_find_mounted_volume_by_mount_point(v->mount_point);
     if (mv) {
         // volume is already mounted
         return 0;
     }
 
+    LOGUI("Create path %s\n", v->mount_point);
     mkdir(v->mount_point, 0755);  // in case it doesn't already exist
 
     if (strcmp(v->fs_type, "yaffs2") == 0) {
         // mount an MTD partition as a YAFFS2 filesystem.
-        mtd_scan_partitions();
+        LOGUI_mtd_scan_partitions();
         const MtdPartition* partition;
-        partition = mtd_find_partition_by_name(v->blk_device);
+        partition = LOGUI_mtd_find_partition_by_name(v->blk_device);
         if (partition == NULL) {
             LOGE("failed to find \"%s\" partition to mount at \"%s\"\n",
                  v->blk_device, v->mount_point);
             return -1;
         }
-        return mtd_mount_partition(partition, v->mount_point, v->fs_type, 0);
+        return LOGUI_mtd_mount_partition(partition, v->mount_point, v->fs_type, 0);
     } else if (strcmp(v->fs_type, "ext4") == 0 ||
                strcmp(v->fs_type, "squashfs") == 0 ||
                strcmp(v->fs_type, "vfat") == 0) {
@@ -183,6 +187,7 @@ int ensure_path_mounted(const char* path) {
 }
 
 int ensure_path_unmounted(const char* path) {
+    LOGUI("Ensure path %s unmounted\n", path);
     Volume* v = volume_for_path(path);
     if (v == NULL) {
         LOGE("unknown volume for path [%s]\n", path);
@@ -194,20 +199,20 @@ int ensure_path_unmounted(const char* path) {
     }
 
     int result;
-    result = scan_mounted_volumes();
+    result = LOGUI_scan_mounted_volumes();
     if (result < 0) {
         LOGE("failed to scan mounted volumes\n");
         return -1;
     }
 
     const MountedVolume* mv =
-        find_mounted_volume_by_mount_point(v->mount_point);
+        LOGUI_find_mounted_volume_by_mount_point(v->mount_point);
     if (mv == NULL) {
         // volume is already unmounted
         return 0;
     }
 
-    return unmount_mounted_volume(mv);
+    return LOGUI_unmount_mounted_volume(mv);
 }
 
 static int exec_cmd(const char* path, char* const argv[]) {
@@ -246,8 +251,8 @@ int format_volume(const char* volume) {
     }
 
     if (strcmp(v->fs_type, "yaffs2") == 0 || strcmp(v->fs_type, "mtd") == 0) {
-        mtd_scan_partitions();
-        const MtdPartition* partition = mtd_find_partition_by_name(v->blk_device);
+        LOGUI_mtd_scan_partitions();
+        const MtdPartition* partition = LOGUI_mtd_find_partition_by_name(v->blk_device);
         if (partition == NULL) {
             LOGE("format_volume: no MTD partition \"%s\"\n", v->blk_device);
             return -1;
@@ -335,21 +340,25 @@ int format_volume(const char* volume) {
 }
 
 int setup_install_mounts() {
+        LOGUI("Setup install mounts...\n");
     if (fstab == NULL) {
         LOGE("can't set up install mounts: no fstab loaded\n");
         return -1;
     }
     for (int i = 0; i < fstab->num_entries; ++i) {
         Volume* v = fstab->recs + i;
+        LOGUI("Checking device %s mount point...\n", v->mount_point);
 
         if (strcmp(v->mount_point, "/tmp") == 0 ||
             strcmp(v->mount_point, "/cache") == 0) {
+            LOGUI("Mounting %s device...\n", v->mount_point);
             if (ensure_path_mounted(v->mount_point) != 0) {
                 LOGE("failed to mount %s\n", v->mount_point);
                 return -1;
             }
 
         } else {
+            LOGUI("Unmounting %s device...\n", v->mount_point);
             if (ensure_path_unmounted(v->mount_point) != 0) {
                 LOGE("failed to unmount %s\n", v->mount_point);
                 return -1;

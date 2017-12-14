@@ -18,6 +18,7 @@
 #include "bootloader.h"
 #include "common.h"
 #include "mtdutils/mtdutils.h"
+#include "mtdutilswrappers.h"
 #include "roots.h"
 
 #include <errno.h>
@@ -69,8 +70,8 @@ static const int MISC_COMMAND_PAGE = 1;  // bootloader command is this page
 static int get_bootloader_message_mtd(struct bootloader_message *out,
                                       const Volume* v) {
     size_t write_size;
-    mtd_scan_partitions();
-    const MtdPartition *part = mtd_find_partition_by_name(v->blk_device);
+    LOGUI_mtd_scan_partitions();
+    const MtdPartition *part = LOGUI_mtd_find_partition_by_name(v->blk_device);
     if (part == NULL || mtd_partition_info(part, NULL, NULL, &write_size)) {
         LOGE("Can't find %s\n", v->blk_device);
         return -1;
@@ -95,8 +96,8 @@ static int get_bootloader_message_mtd(struct bootloader_message *out,
 static int set_bootloader_message_mtd(const struct bootloader_message *in,
                                       const Volume* v) {
     size_t write_size;
-    mtd_scan_partitions();
-    const MtdPartition *part = mtd_find_partition_by_name(v->blk_device);
+    LOGUI_mtd_scan_partitions();
+    const MtdPartition *part = LOGUI_mtd_find_partition_by_name(v->blk_device);
     if (part == NULL || mtd_partition_info(part, NULL, NULL, &write_size)) {
         LOGE("Can't find %s\n", v->blk_device);
         return -1;

@@ -23,7 +23,7 @@
 #include <sys/mount.h>  // for _IOW, _IOR, mount()
 #include <sys/stat.h>
 #include <mtd/mtd-user.h>
-#undef NDEBUG
+#define NDEBUG 1
 #include <assert.h>
 
 #include "mtdutils.h"
