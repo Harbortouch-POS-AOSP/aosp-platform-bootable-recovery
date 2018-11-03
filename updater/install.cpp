@@ -511,6 +511,73 @@ Value* GetPropFn(const char* name, State* state, const std::vector<std::unique_p
   return StringValue(value);
 }
 
+// package_extract_bootloader(package_path, destination_path)
+// bootloader partition is read only
+Value* PackageExtractBootloaderFn(const char* name, State* state, const std::vector<std::unique_ptr<Expr>>& argv) {
+  if (argv.size() != 2) {
+      return ErrorAbort(state, kArgsParsingFailure, "%s() expects 2 args, got %d",
+                        name, argv.size());
+  }
+  int fdm;
+  int fd_force_ro;
+  int fd_boot_config;
+  char content[2];
+  char file_force_ro[50];
+  char file_boot_config[50];
+  UpdaterInfo* ui = static_cast<UpdaterInfo*>(state->cookie);
+
+  ZipArchiveHandle za = static_cast<UpdaterInfo*>(state->cookie)->package_zip;
+  std::vector<std::string> args;
+  if (!ReadArgs(state, argv, &args)) {
+    return ErrorAbort(state, kArgsParsingFailure, "%s() Failed to parse %zu args", name,
+                      argv.size());
+  }
+  const std::string& zip_path = args[0];
+  const std::string& dest_path = args[1];
+
+  ZipEntry entry;
+  ZipString zip_string_path(zip_path.c_str());
+  if (FindEntry(za, zip_string_path, &entry) != 0) {
+      return ErrorAbort(state, kPackageExtractFileFailure, "%s(): no %s in package", name,
+                        zip_path.c_str());
+  }
+  // the partition of uboot(EMMC) is read only, So should set force_ro to 0
+  // set boot_config to 8 which set boot0 as first boot partition.
+  strcpy(file_force_ro,"/sys/block/mmcblk3boot0/force_ro");
+  strcpy(file_boot_config,"/sys/block/mmcblk3/device/boot_config");
+  file_force_ro[17] = dest_path[17];
+  file_boot_config[17] = dest_path[17];
+  fd_force_ro = open(file_force_ro, O_RDWR);
+  fd_boot_config = open(file_boot_config, O_RDWR);
+  FILE* f = fopen(dest_path.c_str(), "wb");
+  if (f == NULL) {
+    return ErrorAbort(state, kFileOpenFailure, "%s: failed to open for write %s: %s", name, dest_path.c_str(),
+                      strerror(errno));
+  }
+  fdm = fileno(f);
+  sprintf(content, "%d", 0);
+  write(fd_force_ro, content, strlen(content));
+  // The  offset of uboot is 1K
+  lseek(fdm , 1024, SEEK_SET);
+  bool success = true;
+  int32_t ret = ExtractEntryToFile(za, &entry, fdm);
+  if (ret != 0) {
+    LOG(ERROR) << name << ": Failed to extract entry \"" << zip_path << "\" ("
+               << entry.uncompressed_length << " bytes) to \"" << dest_path
+               << "\": " << ErrorCodeString(ret);
+    success = false;
+  }
+  sprintf(content, "%d", 1);
+  write(fd_force_ro,content,strlen(content));
+  sprintf(content, "%d", 8);
+  write(fd_boot_config,content,strlen(content));
+  close(fd_force_ro);
+  close(fd_boot_config);
+  fclose(f);
+
+  return StringValue(success ? "t" : "");
+}
+
 // file_getprop(file, key)
 //
 //   interprets 'file' as a getprop-style file (key=value pairs, one
@@ -1033,6 +1100,8 @@ void RegisterInstallFunctions() {
 
   RegisterFunction("getprop", GetPropFn);
   RegisterFunction("file_getprop", FileGetPropFn);
+
+  RegisterFunction("package_extract_bootloader", PackageExtractBootloaderFn);
 
   RegisterFunction("apply_patch", ApplyPatchFn);
   RegisterFunction("apply_patch_check", ApplyPatchCheckFn);
